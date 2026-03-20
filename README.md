@@ -18,30 +18,31 @@ The loop is simple:
 ## Setup
 
 ```bash
-# Install dependencies
-uv sync
-
-# Download enwik9 and generate proxy slices (~1 GB download)
-uv run prepare.py
+# One-time setup: enters nix dev environment, installs deps, downloads enwik9,
+# creates proxy slices, and runs a baseline benchmark to verify everything works.
+nix develop --command ./init.sh
 ```
+
+On non-NixOS Linux: `apt install gcc liblzma-dev` (Debian/Ubuntu) or `dnf install gcc xz-devel` (Fedora), then `uv sync && uv run prepare.py`.
+
+After init, `uv run train.py` works from any shell — `train.py` auto-invokes `nix develop` for compilation when `g++` is not on PATH.
 
 ## Running experiments
 
 ```bash
-# Proxy run (fast, ~seconds)
+# Proxy run (fast, 3×32 MB slices)
 uv run train.py > run.log 2>&1
 grep "proxy_score_bytes:" run.log
 
-# Full run (slow, entire enwik9)
+# Full run (entire 1 GB enwik9)
 uv run train.py --full > run.log 2>&1
 grep "full_score_bytes:" run.log
 ```
 
 Output format:
 ```
-proxy_score_bytes: 117
-archive_bytes: 100
-code_bytes: 17
+proxy_score_bytes: 20445396
+archive_bytes: 20445396
 roundtrip_ok: true
 ```
 
@@ -49,9 +50,11 @@ roundtrip_ok: true
 
 | File | Purpose |
 |------|---------|
-| `train.py` | **Mutable.** Compression candidate + fixed evaluation harness |
+| `compress.cpp` | **Mutable.** Compression algorithm — agent edits this |
+| `train.py` | **Fixed.** Compiles compress.cpp, runs benchmark, verifies roundtrip |
 | `prepare.py` | **Fixed.** Downloads enwik9, generates proxy slices |
 | `prepare_helpers.py` | **Fixed.** Shared constants (enwik9 size, proxy offsets) |
+| `shell.nix` | Nix dev shell providing gcc + liblzma |
 | `program.md` | Agent instructions for the autonomous loop |
 | `results.tsv` | Experiment log (untracked) |
 | `analysis.ipynb` | Notebook for visualizing experiment history |
