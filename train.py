@@ -1,12 +1,12 @@
 import argparse,bz2,os,zlib
 T=1e6
-def compress_payload(d): return bz2.compress(d) if len(d)>=T else zlib.compress(d,9)
-def restore_payload(d): return bz2.decompress(d) if d[:3]==b'BZh' else zlib.decompress(d)
+compress_payload=lambda d:bz2.compress(d) if len(d)>=T else zlib.compress(d,9)
+restore_payload=lambda d:bz2.decompress(d) if d[:3]==b'BZh' else zlib.decompress(d)
 def compute_score_bytes(a,c):
-    if type(a)is not int or type(c)is not int: raise TypeError
+    if{type(a),type(c)}!={int}: raise TypeError
     return a+c
-def is_roundtrip_equal(a,b): return a==b
-def baseline_is_configured(): return os.getenv('FX2_CMIX_BIN')
+is_roundtrip_equal=bytes.__eq__
+baseline_is_configured=lambda:os.getenv('FX2_CMIX_BIN')
 def run_evaluation(m,c):
     c=os.path.expanduser(c or '~/.cache/autoresearch');a=0;o=True
     if m not in('proxy','full'): raise ValueError(m)
