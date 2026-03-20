@@ -1,14 +1,26 @@
 """Minimal train harness placeholder for autoresearch evaluation."""
 
 import argparse
+import bz2
 import os
 import zlib
 from pathlib import Path
 from typing import Iterable, Optional, Tuple
 
 
+_BZ2_THRESHOLD_BYTES = 1_000_000
+
+
 def compress_payload(data: bytes) -> bytes:
+    if len(data) >= _BZ2_THRESHOLD_BYTES:
+        return bz2.compress(data, compresslevel=9)
     return zlib.compress(data, level=9)
+
+
+def restore_payload(data: bytes) -> bytes:
+    if data[:3] == b"BZh":
+        return bz2.decompress(data)
+    return zlib.decompress(data)
 
 
 def compute_score_bytes(archive_bytes: int, code_bytes: int) -> int:
@@ -70,7 +82,7 @@ def run_evaluation(mode: str, cache_dir: Optional[str]) -> Tuple[int, bool]:
     for path in _mode_inputs(mode, cache_path):
         data = _read_file(path)
         compressed = compress_payload(data)
-        decompressed = zlib.decompress(compressed)
+        decompressed = restore_payload(compressed)
         roundtrip_ok = roundtrip_ok and is_roundtrip_equal(data, decompressed)
         archive_bytes += len(compressed)
     return archive_bytes, roundtrip_ok
