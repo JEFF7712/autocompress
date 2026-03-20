@@ -70,8 +70,8 @@ static std::vector<uint8_t> do_compress(const std::vector<uint8_t>& in) {
     memcpy(out.data(), &orig, 8);
 
     size_t out_pos = 0;
-    lzma_ret r = lzma_stream_buffer_encode(
-        filters, LZMA_CHECK_NONE, nullptr,
+    lzma_ret r = lzma_raw_buffer_encode(
+        filters, nullptr,
         in.data(), in.size(),
         out.data() + 8, &out_pos, bound);
     if (r != LZMA_OK) { fprintf(stderr, "lzma encode error: %d\n", (int)r); exit(1); }
@@ -81,16 +81,25 @@ static std::vector<uint8_t> do_compress(const std::vector<uint8_t>& in) {
 
 static std::vector<uint8_t> do_decompress(const std::vector<uint8_t>& in) {
     if (in.size() < 8) { fprintf(stderr, "bad compressed stream\n"); exit(1); }
+    lzma_options_lzma opts;
+    lzma_lzma_preset(&opts, LEVEL | (EXTREME ? LZMA_PRESET_EXTREME : 0u));
+    opts.dict_size = DICT_SIZE;
+    opts.lc = LC; opts.lp = LP; opts.pb = PB;
+
+    lzma_filter filters[] = {
+        { LZMA_FILTER_LZMA2, &opts },
+        { LZMA_VLI_UNKNOWN, nullptr }
+    };
+
     uint64_t orig;
     memcpy(&orig, in.data(), 8);
     std::vector<uint8_t> out(orig);
-    uint64_t mem = UINT64_MAX;
     size_t in_pos = 0, out_pos = 0;
-    lzma_ret r = lzma_stream_buffer_decode(
-        &mem, 0, nullptr,
+    lzma_ret r = lzma_raw_buffer_decode(
+        filters, nullptr,
         in.data() + 8, &in_pos, in.size() - 8,
         out.data(), &out_pos, orig);
-    if (r != LZMA_OK || out_pos != orig) {
+    if (r != LZMA_OK || in_pos != in.size() - 8 || out_pos != orig) {
         fprintf(stderr, "lzma decode error: %d\n", (int)r); exit(1);
     }
     return out;
