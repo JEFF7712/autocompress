@@ -59,7 +59,7 @@ static std::vector<uint8_t> do_compress(const std::vector<uint8_t>& in) {
     opts.lc = LC; opts.lp = LP; opts.pb = PB;
 
     lzma_filter filters[] = {
-        { LZMA_FILTER_LZMA2, &opts },
+        { LZMA_FILTER_LZMA1, &opts },
         { LZMA_VLI_UNKNOWN, nullptr }
     };
 
@@ -87,7 +87,7 @@ static std::vector<uint8_t> do_decompress(const std::vector<uint8_t>& in) {
     opts.lc = LC; opts.lp = LP; opts.pb = PB;
 
     lzma_filter filters[] = {
-        { LZMA_FILTER_LZMA2, &opts },
+        { LZMA_FILTER_LZMA1, &opts },
         { LZMA_VLI_UNKNOWN, nullptr }
     };
 
