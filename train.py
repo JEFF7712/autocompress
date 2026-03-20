@@ -1,7 +1,7 @@
 import argparse,bz2,os,zlib
 T=1e6
 compress_payload=lambda d:bz2.compress(d) if len(d)>=T else zlib.compress(d,9)
-restore_payload=lambda d:bz2.decompress(d) if d[:3]==b'BZh' else zlib.decompress(d)
+restore_payload=lambda d:bz2.decompress(d) if d[0]==66 else zlib.decompress(d)
 def compute_score_bytes(a,c):
     if{type(a),type(c)}!={int}: raise TypeError
     return a+c
