@@ -22,9 +22,9 @@ def restore_payload(data):
 
 def compute_score_bytes(archive_bytes, code_bytes):
     if isinstance(archive_bytes, bool) or isinstance(code_bytes, bool):
-        raise TypeError("compute_score_bytes requires integers")
+        raise TypeError("ints only")
     if not isinstance(archive_bytes, int) or not isinstance(code_bytes, int):
-        raise TypeError("compute_score_bytes requires integers")
+        raise TypeError("ints only")
     return archive_bytes + code_bytes
 
 
@@ -43,9 +43,7 @@ def _get_cache_dir(cache_dir):
 
 def _validate_mode(mode):
     if mode not in {"proxy", "full"}:
-        raise ValueError(
-            "unsupported mode %r; expected one of ('proxy', 'full')" % mode
-        )
+        raise ValueError(mode)
     return mode
 
 
@@ -92,17 +90,17 @@ def format_summary(mode, archive_bytes, code_bytes, score_bytes, roundtrip_ok):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Autoresearch train harness")
+    parser = argparse.ArgumentParser(description="train harness")
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Emit the full score key instead of the proxy score key",
+        help="use full data",
     )
     parser.add_argument(
         "--cache-dir",
         type=str,
         default=None,
-        help="Override the cache directory for input slices",
+        help="cache dir",
     )
     args = parser.parse_args()
     mode = "full" if args.full else "proxy"
