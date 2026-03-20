@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Iterable, Optional, Tuple
 
 
+def compress_payload(data: bytes) -> bytes:
+    return zlib.compress(data, level=9)
+
+
 def compute_score_bytes(archive_bytes: int, code_bytes: int) -> int:
     """Score is total bytes needed to reproduce the solution."""
     if isinstance(archive_bytes, bool) or isinstance(code_bytes, bool):
@@ -65,7 +69,7 @@ def run_evaluation(mode: str, cache_dir: Optional[str]) -> Tuple[int, bool]:
     roundtrip_ok = True
     for path in _mode_inputs(mode, cache_path):
         data = _read_file(path)
-        compressed = zlib.compress(data)
+        compressed = compress_payload(data)
         decompressed = zlib.decompress(compressed)
         roundtrip_ok = roundtrip_ok and is_roundtrip_equal(data, decompressed)
         archive_bytes += len(compressed)
