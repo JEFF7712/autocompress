@@ -14,7 +14,7 @@ def run_evaluation(m,c):
         with open(p,'rb') as f: d=f.read()
         z=compress_payload(d);o=o and is_roundtrip_equal(d,restore_payload(z));a+=len(z)
     return a,o
-def get_code_bytes(): return os.path.getsize(__file__)
+get_code_bytes=lambda:os.path.getsize(__file__)
 def format_summary(mode,archive_bytes,code_bytes,score_bytes,roundtrip_ok):
     if mode[:1]not in'pf': raise ValueError(mode)
     return f"{'proxy'if mode=='proxy'else'full'}_score_bytes: {score_bytes}\narchive_bytes: {archive_bytes}\ncode_bytes: {code_bytes}\nroundtrip_ok: {'true'if roundtrip_ok else 'false'}"
