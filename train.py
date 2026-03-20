@@ -4,7 +4,7 @@ T = 1_000_000
 
 
 def compress_payload(d):
-    return bz2.compress(d, compresslevel=9) if len(d) >= T else zlib.compress(d, 9)
+    return bz2.compress(d) if len(d) >= T else zlib.compress(d, 9)
 
 
 def restore_payload(d):
@@ -13,7 +13,7 @@ def restore_payload(d):
 
 def compute_score_bytes(a, c):
     if type(a) is not int or type(c) is not int:
-        raise TypeError("ints only")
+        raise TypeError("int")
     return a + c
 
 
