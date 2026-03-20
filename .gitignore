@@ -1,0 +1,32 @@
+# Python cache and artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+
+# Virtualenvs and tool caches
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Test and coverage outputs
+.coverage
+coverage.xml
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local experiment outputs
+results.tsv
+run.log
+run_full.log
+
+# Worktree directories
+.worktrees/
+worktrees/
+
+# Editor/OS noise
+.DS_Store
+*.swp
+*.swo
