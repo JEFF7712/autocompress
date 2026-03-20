@@ -70,9 +70,9 @@ def format_summary(mode, archive_bytes, code_bytes, score_bytes, roundtrip_ok):
 
 
 def main():
-    p = argparse.ArgumentParser(description="train harness")
-    p.add_argument("--full", action="store_true", help="use full data")
-    p.add_argument("--cache-dir", type=str, default=None, help="cache dir")
+    p = argparse.ArgumentParser()
+    p.add_argument("--full", action="store_true")
+    p.add_argument("--cache-dir", type=str, default=None)
     a = p.parse_args()
     m = "full" if a.full else "proxy"
     b, o = run_evaluation(m, a.cache_dir)
