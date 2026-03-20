@@ -17,10 +17,14 @@ coverage.xml
 # Notebook checkpoints
 .ipynb_checkpoints/
 
+# Compiled binary
+compress
+
 # Local experiment outputs
 results.tsv
 run.log
 run_full.log
+prompt.txt
 
 # Worktree directories
 .worktrees/
