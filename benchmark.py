@@ -5,9 +5,9 @@ Compiles compress.cpp, runs it on benchmark files, verifies roundtrip, reports s
 DO NOT MODIFY — agent edits compress.cpp only.
 
 Usage:
-    uv run train.py              # proxy run (3x32MB slices, fast)
-    uv run train.py --full       # full enwik9 run (1 GB, slow)
-    uv run train.py --cache-dir /path/to/cache
+    uv run benchmark.py              # proxy run (3x32MB slices, fast)
+    uv run benchmark.py --full       # full enwik9 run (1 GB, slow)
+    uv run benchmark.py --cache-dir /path/to/cache
 """
 
 import argparse

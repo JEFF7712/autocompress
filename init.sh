@@ -5,11 +5,11 @@
 #   nix develop --command ./init.sh
 #
 # After init completes, run experiments with:
-#   uv run train.py
-#   uv run train.py --full
+#   uv run benchmark.py
+#   uv run benchmark.py --full
 #
-# train.py auto-invokes nix develop for compilation when g++ is not on PATH,
-# so subsequent uv run train.py calls work from any shell.
+# benchmark.py auto-invokes nix develop for compilation when g++ is not on PATH,
+# so subsequent uv run benchmark.py calls work from any shell.
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ echo ""
 
 # 3. Verify compile + benchmark works end-to-end
 echo "[3/3] Compiling compress.cpp and running baseline proxy benchmark..."
-uv run train.py > /tmp/autocompress_init.log 2>&1 || {
+uv run benchmark.py > /tmp/autocompress_init.log 2>&1 || {
     echo "FAILED. Last 30 lines of output:"
     tail -n 30 /tmp/autocompress_init.log
     exit 1
@@ -46,4 +46,4 @@ echo "=== Init complete. Environment is ready. ==="
 echo ""
 echo "Start the experiment loop:"
 echo "  Read program.md for instructions, then edit compress.cpp and run:"
-echo "  uv run train.py > run.log 2>&1"
+echo "  uv run benchmark.py > run.log 2>&1"

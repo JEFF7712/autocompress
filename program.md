@@ -16,7 +16,7 @@ To set up a new experiment, work with the user to:
 4. **Read the in-scope files**: Read these files for full context:
    - `README.md` — repository context.
    - `compress.cpp` — the file you modify. Compression algorithm. Starts with tunable LZMA.
-   - `train.py` — fixed harness (compiles compress.cpp, runs benchmark, reports score). Do not modify.
+   - `benchmark.py` — fixed harness (compiles compress.cpp, runs benchmark, reports score). Do not modify.
 5. **Initialize results.tsv**: Create `results.tsv` with just the header row (see template). Record the baseline score from init.sh output as the first row.
 6. **Confirm and go**: Confirm setup looks good.
 
@@ -24,9 +24,9 @@ Once you get confirmation, kick off the experimentation.
 
 ## Experimentation
 
-Each experiment modifies `compress.cpp` and benchmarks it against the enwik9 proxy slices. The harness in `train.py` compiles the C++ file, runs it, verifies roundtrip correctness, and reports the score.
+Each experiment modifies `compress.cpp` and benchmarks it against the enwik9 proxy slices. The harness in `benchmark.py` compiles the C++ file, runs it, verifies roundtrip correctness, and reports the score.
 
-**You can only edit `compress.cpp`.** The harness (`train.py`), data prep (`prepare.py`), and dependencies are fixed.
+**You can only edit `compress.cpp`.** The harness (`benchmark.py`), data prep (`prepare.py`), and dependencies are fixed.
 
 **The goal is simple: minimize `archive_bytes`** — the total compressed size across all benchmark files. Lower is better.
 
@@ -93,7 +93,7 @@ LOOP FOREVER:
 1. Look at the git state: the current branch/commit
 2. Modify `compress.cpp` with an experimental idea
 3. `git commit -m "short description"`
-4. Run: `uv run train.py > run.log 2>&1` (redirect everything — do NOT use tee)
+4. Run: `uv run benchmark.py > run.log 2>&1` (redirect everything — do NOT use tee)
 5. Parse score: `grep "^proxy_score_bytes:" run.log`
 6. If empty (crash): run `tail -n 50 run.log` to read the error. Fix if trivial (typo, missing include); otherwise log as crash and revert.
 7. If `roundtrip_ok: false`: immediate failure — the compressor is broken. Revert.
@@ -103,7 +103,7 @@ LOOP FOREVER:
 
 When proxy improves, run the full benchmark to get a real score:
 ```
-uv run train.py --full > run.log 2>&1
+uv run benchmark.py --full > run.log 2>&1
 grep "^full_score_bytes:" run.log
 ```
 Update results.tsv with the full score.

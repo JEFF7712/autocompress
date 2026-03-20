@@ -2,18 +2,18 @@
 
 An autonomous research loop for [Hutter Prize](http://prize.hutter1.net/index.htm)-style lossless compression on `enwik9`. Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch).
 
-An LLM agent iterates on `train.py`, runs compression benchmarks, keeps improvements, and discards regressions — autonomously, indefinitely.
+An LLM agent iterates on `compress.cpp`, runs compression benchmarks, keeps improvements, and discards regressions — autonomously, indefinitely.
 
 ## How it works
 
 The loop is simple:
 
-1. Propose a change to the compression algorithm in `train.py`
+1. Propose a change to the compression algorithm in `compress.cpp`
 2. Run proxy benchmark (3 × 32 MB slices of enwik9 — fast)
 3. If proxy improves, run full benchmark on all 1 GB of enwik9
 4. Keep commit if score improves, `git reset` otherwise
 
-**Score = `archive_bytes + code_bytes`** (lower is better — code size counts, per Hutter Prize rules).
+**Score = `archive_bytes`** (lower is better — total compressed size across benchmark files).
 
 ## Setup
 
@@ -25,17 +25,17 @@ nix develop --command ./init.sh
 
 On non-NixOS Linux: `apt install gcc liblzma-dev` (Debian/Ubuntu) or `dnf install gcc xz-devel` (Fedora), then `uv sync && uv run prepare.py`.
 
-After init, `uv run train.py` works from any shell — `train.py` auto-invokes `nix develop` for compilation when `g++` is not on PATH.
+After init, `uv run benchmark.py` works from any shell — `benchmark.py` auto-invokes `nix develop` for compilation when `g++` is not on PATH.
 
 ## Running experiments
 
 ```bash
 # Proxy run (fast, 3×32 MB slices)
-uv run train.py > run.log 2>&1
+uv run benchmark.py > run.log 2>&1
 grep "proxy_score_bytes:" run.log
 
 # Full run (entire 1 GB enwik9)
-uv run train.py --full > run.log 2>&1
+uv run benchmark.py --full > run.log 2>&1
 grep "full_score_bytes:" run.log
 ```
 
@@ -51,13 +51,13 @@ roundtrip_ok: true
 | File | Purpose |
 |------|---------|
 | `compress.cpp` | **Mutable.** Compression algorithm — agent edits this |
-| `train.py` | **Fixed.** Compiles compress.cpp, runs benchmark, verifies roundtrip |
+| `benchmark.py` | **Fixed.** Compiles compress.cpp, runs benchmark, verifies roundtrip |
 | `prepare.py` | **Fixed.** Downloads enwik9, generates proxy slices |
 | `prepare_helpers.py` | **Fixed.** Shared constants (enwik9 size, proxy offsets) |
-| `shell.nix` | Nix dev shell providing gcc + liblzma |
+| `flake.nix` | Reproducible dev environment (gcc + liblzma) |
+| `init.sh` | One-time setup script |
 | `program.md` | Agent instructions for the autonomous loop |
-| `results.tsv` | Experiment log (untracked) |
-| `analysis.ipynb` | Notebook for visualizing experiment history |
+| `results_template.tsv` | TSV header template for experiment runs |
 
 ## Autonomous loop
 
