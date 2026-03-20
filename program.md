@@ -63,7 +63,7 @@ commit	proxy_score_bytes	full_score_bytes	status	description
 
 ## The experiment loop
 
-The experiment runs on a dedicated branch (e.g. `autoresearch/mar5` or `autoresearch/mar5-gpu0`).
+The experiment runs on a dedicated branch (e.g. `autocompress/mar5` or `autocompress/mar5-gpu0`).
 
 LOOP FOREVER:
 
