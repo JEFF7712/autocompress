@@ -26,7 +26,7 @@ static const uint32_t LEVEL     = 9;          // 0-9 (compression level)
 static const uint64_t DICT_SIZE = 1u << 26;   // 64 MB dictionary (2^n or 3*2^n)
 static const uint32_t LC        = 4;           // literal context bits (0-4, lc+lp <= 4)
 static const uint32_t LP        = 0;           // literal position bits (0-4)
-static const uint32_t PB        = 2;           // position bits (0-4)
+static const uint32_t PB        = 0;           // position bits (0-4)
 static const bool     EXTREME   = true;        // extra compression effort (slower)
 
 // ============================================================
