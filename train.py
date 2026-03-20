@@ -25,19 +25,18 @@ def baseline_is_configured():
     return bool(os.getenv("FX2_CMIX_BIN"))
 
 
-def _get_cache_dir(c):
-    return os.path.expanduser(c or "~/.cache/autoresearch")
-
-
 def _validate_mode(m):
     if m not in ("proxy", "full"):
         raise ValueError(m)
     return m
 
 
-def _mode_inputs(m, c):
+def run_evaluation(m, c):
+    c = os.path.expanduser(c or "~/.cache/autoresearch")
+    a = 0
+    o = True
     _validate_mode(m)
-    return (
+    for p in (
         [
             f"{c}/proxy_slices/head.bin",
             f"{c}/proxy_slices/mid.bin",
@@ -45,13 +44,7 @@ def _mode_inputs(m, c):
         ]
         if m == "proxy"
         else [f"{c}/enwik9"]
-    )
-
-
-def run_evaluation(m, c):
-    a = 0
-    o = True
-    for p in _mode_inputs(m, _get_cache_dir(c)):
+    ):
         with open(p, "rb") as f:
             d = f.read()
         z = compress_payload(d)
@@ -72,7 +65,7 @@ def format_summary(mode, archive_bytes, code_bytes, score_bytes, roundtrip_ok):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--full", action="store_true")
-    p.add_argument("--cache-dir", type=str, default=None)
+    p.add_argument("--cache-dir")
     a = p.parse_args()
     m = "full" if a.full else "proxy"
     b, o = run_evaluation(m, a.cache_dir)
