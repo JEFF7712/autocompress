@@ -14,11 +14,13 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from prepare_helpers import expected_enwik9_size_bytes, proxy_offsets
+from prepare_helpers import expected_enwik9_size_bytes, proxy_offset
 
 CACHE_DIR = Path.home() / ".cache" / "autoresearch"
 ENWIK9_URL = "https://mattmahoney.net/dc/enwik9.zip"
-PROXY_SLICE_SIZE = 32 * 1024 * 1024  # 32 MB per slice
+# Single contiguous slice, larger than the default 64 MB LZMA dictionary so that
+# dictionary-size and long-range-model experiments register on the proxy.
+PROXY_SLICE_SIZE = 128 * 1024 * 1024  # 128 MB
 
 
 def verify_enwik9_size(path: Path) -> bool:
@@ -78,19 +80,18 @@ def _ensure_enwik9(cache_dir: Path) -> Path:
     raise RuntimeError("unreachable")
 
 
-def create_proxy_slices(enwik9_path: Path, proxy_dir: Path, slice_size: int = PROXY_SLICE_SIZE) -> list[Path]:
-    """Write head/mid/tail slices of enwik9 for fast proxy benchmarking."""
+def create_proxy_slice(
+    enwik9_path: Path, proxy_dir: Path, slice_size: int = PROXY_SLICE_SIZE
+) -> Path:
+    """Write a single contiguous proxy slice of enwik9 for fast benchmarking."""
     proxy_dir.mkdir(parents=True, exist_ok=True)
     total = enwik9_path.stat().st_size
-    starts = proxy_offsets(total_size=total, slice_size=slice_size)
-    outputs = []
+    start = proxy_offset(total_size=total, slice_size=slice_size)
+    out = proxy_dir / "proxy.bin"
     with enwik9_path.open("rb") as src:
-        for name, start in zip(["head", "mid", "tail"], starts):
-            out = proxy_dir / f"{name}.bin"
-            src.seek(start)
-            out.write_bytes(src.read(slice_size))
-            outputs.append(out)
-    return outputs
+        src.seek(start)
+        out.write_bytes(src.read(slice_size))
+    return out
 
 
 def main() -> None:
@@ -102,8 +103,8 @@ def main() -> None:
         sys.exit(1)
 
     proxy_dir = CACHE_DIR / "proxy_slices"
-    outputs = create_proxy_slices(enwik9, proxy_dir)
-    print("Proxy slices ready:", ", ".join(str(p) for p in outputs))
+    out = create_proxy_slice(enwik9, proxy_dir)
+    print("Proxy slice ready:", out)
 
 
 if __name__ == "__main__":

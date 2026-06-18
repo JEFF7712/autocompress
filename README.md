@@ -9,17 +9,17 @@ An LLM agent iterates on `compress.cpp`, runs compression benchmarks, keeps impr
 The loop is simple:
 
 1. Propose a change to the compression algorithm in `compress.cpp`
-2. Run proxy benchmark (3 × 32 MB slices of enwik9 — fast)
+2. Run proxy benchmark (single contiguous 128 MB slice of enwik9 — fast)
 3. If proxy improves, run full benchmark on all 1 GB of enwik9
 4. Keep commit if score improves, `git reset` otherwise
 
-**Score = `archive_bytes`** (lower is better — total compressed size across benchmark files).
+**Score = `archive_bytes + binary_bytes`** (lower is better — compressed output plus the size of the compiled decompressor, mirroring the Hutter Prize). Counting the binary forbids embedding corpus-derived data into `compress.cpp` to shrink the archive for free.
 
 ## Setup
 
 ```bash
 # One-time setup: enters nix dev environment, installs deps, downloads enwik9,
-# creates proxy slices, and runs a baseline benchmark to verify everything works.
+# creates the proxy slice, and runs a baseline benchmark to verify everything works.
 nix develop --command ./init.sh
 ```
 
@@ -30,7 +30,7 @@ After init, `uv run benchmark.py` works from any shell — `benchmark.py` auto-i
 ## Running experiments
 
 ```bash
-# Proxy run (fast, 3×32 MB slices)
+# Proxy run (fast, single 128 MB slice)
 uv run benchmark.py > run.log 2>&1
 grep "proxy_score_bytes:" run.log
 
@@ -41,8 +41,9 @@ grep "full_score_bytes:" run.log
 
 Output format:
 ```
-proxy_score_bytes: 20445396
+proxy_score_bytes: 20470396
 archive_bytes: 20445396
+binary_bytes: 25000
 roundtrip_ok: true
 ```
 
@@ -52,8 +53,8 @@ roundtrip_ok: true
 |------|---------|
 | `compress.cpp` | **Mutable.** Compression algorithm — agent edits this |
 | `benchmark.py` | **Fixed.** Compiles compress.cpp, runs benchmark, verifies roundtrip |
-| `prepare.py` | **Fixed.** Downloads enwik9, generates proxy slices |
-| `prepare_helpers.py` | **Fixed.** Shared constants (enwik9 size, proxy offsets) |
+| `prepare.py` | **Fixed.** Downloads enwik9, generates the proxy slice |
+| `prepare_helpers.py` | **Fixed.** Shared constants (enwik9 size, proxy offset) |
 | `flake.nix` | Reproducible dev environment (gcc + liblzma) |
 | `init.sh` | One-time setup script |
 | `program.md` | Agent instructions for the autonomous loop |

@@ -28,16 +28,16 @@ Each experiment modifies `compress.cpp` and benchmarks it against the enwik9 pro
 
 **You can only edit `compress.cpp`.** The harness (`benchmark.py`), data prep (`prepare.py`), and dependencies are fixed.
 
-**The goal is simple: minimize `archive_bytes`** — the total compressed size across all benchmark files. Lower is better.
+**The goal is simple: minimize the score** — `archive_bytes + binary_bytes`: the total compressed size plus the size of the compiled `compress` binary (the decompressor). Lower is better. This mirrors the real Hutter Prize, which scores compressor + archive together.
 
-The score no longer includes code size. Focus on compression quality, not code golf.
+Because the binary baseline (~25 KB) is negligible next to a ~200 MB archive, there is effectively no incentive to golf hand-written algorithm code. The binary term exists to forbid one specific cheat: embedding corpus-derived data — a dictionary primed on enwik9, a trained model, or the input itself — into `compress.cpp`. Such data lands in the binary and is counted byte-for-byte, so it only pays off if it saves more than it costs (which is exactly the legitimate economics of dictionary coding).
 
 ## What to explore
 
 The starting point is LZMA2 with tunable parameters (level, dict size, lc/lp/pb). That's already much better than the previous Python bz2 approach. But there is a long road ahead:
 
 **Near-term** (tune existing algorithm):
-- Increase `DICT_SIZE` (try 128 MB, 256 MB — bigger = better compression, more memory)
+- Increase `DICT_SIZE` (try 128 MB, 256 MB — bigger = better compression, more memory). NOTE: the proxy is a single 128 MB slice, so a dictionary larger than the input it sees can't register a gain on proxy. Dict sizes ≥ 128 MB must be validated on the full run directly — do not discard them on a flat proxy score (see the keep/discard rule below).
 - Enable `EXTREME` mode
 - Tune `LC`/`LP`/`PB` — for text, `lc=4, lp=0, pb=2` or `lc=3, lp=0, pb=2` often works well
 - Try adding a BCJ (Branch/Call/Jump) or delta filter before LZMA2 (not helpful for XML text, but try it)
@@ -55,15 +55,16 @@ The starting point is LZMA2 with tunable parameters (level, dict size, lc/lp/pb)
 
 ## Output format
 
-Each run prints exactly three lines:
+Each run prints exactly four lines:
 
 ```
-proxy_score_bytes: 14500000
+proxy_score_bytes: 14525000
 archive_bytes: 14500000
+binary_bytes: 25000
 roundtrip_ok: true
 ```
 
-Proxy runs print `proxy_score_bytes`, full runs print `full_score_bytes`. Parse with:
+The score (`proxy_score_bytes` / `full_score_bytes`) is `archive_bytes + binary_bytes`. Proxy runs print `proxy_score_bytes`, full runs print `full_score_bytes`. Parse with:
 ```
 grep "^proxy_score_bytes:\|^full_score_bytes:" run.log
 ```
@@ -75,14 +76,17 @@ If `roundtrip_ok: false` appears or the process exits non-zero, treat as a crash
 Log each experiment to `results.tsv` (tab-separated, untracked by git). Columns:
 
 ```
-commit	proxy_score_bytes	full_score_bytes	status	description
+commit	proxy_score_bytes	full_score_bytes	binary_bytes	status	description
 ```
 
 1. git commit hash (short, 7 chars)
-2. proxy_score_bytes (0 if crashed before scoring)
-3. full_score_bytes (0 if not run yet)
-4. status: `keep`, `discard`, or `crash`
-5. short description of what this experiment tried (no commas)
+2. proxy_score_bytes (archive + binary; 0 if crashed before scoring)
+3. full_score_bytes (archive + binary; 0 if not run yet)
+4. binary_bytes (size of the compiled decompressor — watch this if you embed data)
+5. status: `keep`, `discard`, or `crash`
+6. short description of what this experiment tried (no commas)
+
+Logging `binary_bytes` alongside both scores lets you watch the proxy↔full correlation hold (or break) across experiments instead of assuming it.
 
 ## The experiment loop
 
@@ -100,6 +104,7 @@ LOOP FOREVER:
 8. Log results in results.tsv
 9. **Keep**: if proxy_score_bytes improved (lower), keep the commit and optionally run full benchmark
 10. **Discard**: if score is equal or worse, `git reset --hard HEAD~1` to revert
+11. **Exception — proxy-invisible changes**: the proxy is one 128 MB slice. Changes whose payoff only appears at full scale — dictionaries ≥ 128 MB, long-range / whole-corpus models — can show a flat or slightly worse proxy score yet still win on the full 1 GB. For these, run the full benchmark *before* discarding, and keep/discard on the full score.
 
 When proxy improves, run the full benchmark to get a real score:
 ```
@@ -108,7 +113,7 @@ grep "^full_score_bytes:" run.log
 ```
 Update results.tsv with the full score.
 
-**Timeout**: Proxy runs should finish in under 2 minutes. Full enwik9 runs may take 5-30 minutes depending on the algorithm. If a run exceeds 60 minutes, kill it and treat as a failed experiment.
+**Timeout**: Proxy runs (single 128 MB slice) should finish in roughly 2-6 minutes with LZMA — longer with heavier algorithms. Full enwik9 runs may take 5-30 minutes depending on the algorithm. If a run exceeds 60 minutes, kill it and treat as a failed experiment.
 
 **Crashes**: Fix obvious bugs (typo, missing include, wrong flag). If the idea is fundamentally broken, log crash and move on.
 

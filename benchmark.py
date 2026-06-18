@@ -4,8 +4,10 @@ Compiles compress.cpp, runs it on benchmark files, verifies roundtrip, reports s
 
 DO NOT MODIFY — agent edits compress.cpp only.
 
+Score = archive_bytes + binary_bytes (compressed output + the decompressor).
+
 Usage:
-    uv run benchmark.py              # proxy run (3x32MB slices, fast)
+    uv run benchmark.py              # proxy run (single 128 MB slice, fast)
     uv run benchmark.py --full       # full enwik9 run (1 GB, slow)
     uv run benchmark.py --cache-dir /path/to/cache
 """
@@ -47,8 +49,11 @@ def compile_compressor() -> None:
 def _compile_direct(cxx: str) -> None:
     flags: list[str] = []
     try:
-        r = subprocess.run(["pkg-config", "--cflags", "--libs", "liblzma"],
-                           capture_output=True, text=True)
+        r = subprocess.run(
+            ["pkg-config", "--cflags", "--libs", "liblzma"],
+            capture_output=True,
+            text=True,
+        )
         if r.returncode == 0:
             flags = r.stdout.split()
     except FileNotFoundError:
@@ -66,11 +71,12 @@ def _compile_via_nix() -> None:
     # nix sets NIX_LDFLAGS (rpath) so the compiled binary runs outside the shell.
     compile_cmd = (
         f'g++ -O3 -std=c++17 -march=native -o "{BIN}" "{SRC}" '
-        f'$(pkg-config --cflags --libs liblzma)'
+        f"$(pkg-config --cflags --libs liblzma)"
     )
     r = subprocess.run(
         ["nix", "develop", str(FLAKE.parent), "--command", "bash", "-c", compile_cmd],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if r.returncode != 0:
         sys.stderr.write(f"nix develop compile error:\n{r.stderr}\n")
@@ -115,7 +121,11 @@ def main() -> None:
     p.add_argument("--cache-dir", default=None)
     args = p.parse_args()
 
-    cache = pathlib.Path(args.cache_dir) if args.cache_dir else pathlib.Path.home() / ".cache" / "autoresearch"
+    cache = (
+        pathlib.Path(args.cache_dir)
+        if args.cache_dir
+        else pathlib.Path.home() / ".cache" / "autoresearch"
+    )
 
     if args.full:
         enwik9 = cache / "enwik9"
@@ -125,25 +135,34 @@ def main() -> None:
         files = [enwik9]
         mode = "full"
     else:
-        slices = [cache / "proxy_slices" / s for s in ("head.bin", "mid.bin", "tail.bin")]
-        missing = [s for s in slices if not s.exists()]
-        if missing:
-            sys.stderr.write(f"proxy slices missing: {missing} — run prepare.py first\n")
+        proxy = cache / "proxy_slices" / "proxy.bin"
+        if not proxy.exists():
+            sys.stderr.write(f"proxy slice missing: {proxy} — run prepare.py first\n")
             sys.exit(1)
-        files = slices
+        files = [proxy]
         mode = "proxy"
 
     compile_compressor()
 
+    # The compiled binary IS the decompressor; its size counts toward the score,
+    # just as in the Hutter Prize. This prevents the degenerate strategy of
+    # embedding corpus-derived data (a primed dictionary, a trained model, or the
+    # input itself) into compress.cpp to shrink the archive for free.
+    binary_bytes = BIN.stat().st_size
+
     archive_bytes, roundtrip_ok = evaluate(files)
 
     if not roundtrip_ok:
-        sys.stderr.write("ROUNDTRIP MISMATCH — decompressed output does not match input!\n")
+        sys.stderr.write(
+            "ROUNDTRIP MISMATCH — decompressed output does not match input!\n"
+        )
         sys.exit(1)
 
+    score = archive_bytes + binary_bytes
     score_key = "proxy_score_bytes" if mode == "proxy" else "full_score_bytes"
-    print(f"{score_key}: {archive_bytes}")
+    print(f"{score_key}: {score}")
     print(f"archive_bytes: {archive_bytes}")
+    print(f"binary_bytes: {binary_bytes}")
     print(f"roundtrip_ok: true")
 
 
