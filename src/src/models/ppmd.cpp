@@ -5,6 +5,9 @@
 #include "ppmd.h"
 #include <cstring>
 #include <sys/mman.h>
+#ifndef MAP_FIXED_NOREPLACE
+#define MAP_FIXED_NOREPLACE 0x100000
+#endif
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -1389,13 +1392,18 @@ void PPMD::ByteUpdate() {
   ByteModel::ByteUpdate();
   probs_ /= probs_.sum();
   if (mmap_to_disk && counter_ % 20000 == 0) {
-    int err = munmap(ppmd_model_->HeapStart, mmap_size);
+    byte* old_base = ppmd_model_->HeapStart;
+    int err = munmap(old_base, mmap_size);
     if(err != 0) {
       exit(EXIT_FAILURE);
     }
     int fd = open(mmap_path, O_RDWR);
-    ppmd_model_->HeapStart = (byte*) mmap(NULL, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-    if(ppmd_model_->HeapStart == MAP_FAILED) {
+    // The PPM model holds absolute pointers into this heap (pText, UnitsStart,
+    // HiUnit, the context trie, ...), so the remap must land at the same base.
+    // Kernels >= ~6.x no longer reliably reuse the freed hole for a NULL-hint
+    // mmap, so pin it with MAP_FIXED_NOREPLACE and treat relocation as fatal.
+    ppmd_model_->HeapStart = (byte*) mmap(old_base, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_FIXED_NOREPLACE, fd, 0);
+    if(ppmd_model_->HeapStart != old_base) {
       exit(EXIT_FAILURE);
     }
     close(fd);
