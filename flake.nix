@@ -1,22 +1,38 @@
 {
-  description = "autocompress — Hutter Prize autoresearch dev environment";
+  description = "autocompress: Hutter Prize world-record harness";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # Pinned: nixos-unstable dropped llvmPackages_17 (2025-08); fx2-cmix's PGO
+  # build is clang-17-validated, so the pin is load-bearing.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
 
-  outputs = { self, nixpkgs }:
+  outputs =
+    { self, nixpkgs }:
     let
-      systems = [ "x86_64-linux" "aarch64-linux" ];
+      systems = [ "x86_64-linux" ];
       forAll = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
-    in {
-      devShells = forAll (pkgs: {
-        default = pkgs.mkShell {
-          packages = [
-            pkgs.gcc        # C++ compiler
-            pkgs.xz.dev     # lzma.h + liblzma
-            pkgs.pkg-config # so train.py can find liblzma flags
-            pkgs.uv         # Python package manager
+    in
+    {
+      devShells = forAll (
+        pkgs:
+        let
+          clang17 = pkgs.llvmPackages_17.clang;
+          wrappers = [
+            (pkgs.writeShellScriptBin "clang++-17" ''exec ${clang17}/bin/clang++ "$@"'')
+            (pkgs.writeShellScriptBin "llvm-profdata-17" ''exec ${pkgs.llvmPackages_17.llvm}/bin/llvm-profdata "$@"'')
+            (pkgs.writeShellScriptBin "upx-ucl" ''exec ${pkgs.upx}/bin/upx "$@"'')
           ];
-        };
-      });
+        in
+        {
+          default = pkgs.mkShell {
+            packages = wrappers ++ [
+              clang17
+              pkgs.llvmPackages_17.llvm
+              pkgs.upx
+              pkgs.gnumake
+              pkgs.uv
+            ];
+          };
+        }
+      );
     };
 }

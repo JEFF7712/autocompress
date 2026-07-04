@@ -34,3 +34,15 @@ worktrees/
 .DS_Store
 *.swp
 *.swo
+
+ledger.tsv
+runs/
+config.toml
+src/pgo_data/
+src/run/
+src/*.o
+src/default.profdata
+src/prof_output
+src/prof_comp
+src/cmix
+src/remap
