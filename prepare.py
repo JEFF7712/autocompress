@@ -1,11 +1,9 @@
-"""
-One-time data preparation for the autocompress experiment loop.
-Downloads enwik9 and creates deterministic proxy slices for fast benchmarking.
+"""One-time data preparation: download enwik9, derive tier prefixes.
 
 Usage:
     uv run prepare.py
 
-Data is cached in ~/.cache/autoresearch/. Safe to re-run — skips work already done.
+Data is cached in ~/.cache/autoresearch/. Safe to re-run.
 """
 
 import shutil
@@ -14,17 +12,15 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from prepare_helpers import expected_enwik9_size_bytes, proxy_offset
+from tiers import ensure_tiers
 
 CACHE_DIR = Path.home() / ".cache" / "autoresearch"
 ENWIK9_URL = "https://mattmahoney.net/dc/enwik9.zip"
-# Single contiguous slice, larger than the default 64 MB LZMA dictionary so that
-# dictionary-size and long-range-model experiments register on the proxy.
-PROXY_SLICE_SIZE = 128 * 1024 * 1024  # 128 MB
+ENWIK9_SIZE = 1_000_000_000
 
 
 def verify_enwik9_size(path: Path) -> bool:
-    return path.exists() and path.stat().st_size == expected_enwik9_size_bytes()
+    return path.exists() and path.stat().st_size == ENWIK9_SIZE
 
 
 def _download_enwik9_zip(zip_path: Path) -> None:
@@ -36,7 +32,7 @@ def _download_enwik9_zip(zip_path: Path) -> None:
 
 
 def _extract_enwik9(zip_path: Path, dest: Path) -> None:
-    print(f"Extracting enwik9 ...")
+    print("Extracting enwik9 ...")
     with zipfile.ZipFile(zip_path) as z:
         z.extractall(dest)
 
@@ -80,31 +76,15 @@ def _ensure_enwik9(cache_dir: Path) -> Path:
     raise RuntimeError("unreachable")
 
 
-def create_proxy_slice(
-    enwik9_path: Path, proxy_dir: Path, slice_size: int = PROXY_SLICE_SIZE
-) -> Path:
-    """Write a single contiguous proxy slice of enwik9 for fast benchmarking."""
-    proxy_dir.mkdir(parents=True, exist_ok=True)
-    total = enwik9_path.stat().st_size
-    start = proxy_offset(total_size=total, slice_size=slice_size)
-    out = proxy_dir / "proxy.bin"
-    with enwik9_path.open("rb") as src:
-        src.seek(start)
-        out.write_bytes(src.read(slice_size))
-    return out
-
-
 def main() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     enwik9 = _ensure_enwik9(CACHE_DIR)
-
     if not verify_enwik9_size(enwik9):
-        print(f"ERROR: enwik9 verification failed", file=sys.stderr)
+        print("ERROR: enwik9 verification failed", file=sys.stderr)
         sys.exit(1)
-
-    proxy_dir = CACHE_DIR / "proxy_slices"
-    out = create_proxy_slice(enwik9, proxy_dir)
-    print("Proxy slice ready:", out)
+    paths = ensure_tiers(enwik9, CACHE_DIR / "tiers")
+    for tier, p in sorted(paths.items()):
+        print(f"{tier}: {p} ({p.stat().st_size} bytes)")
 
 
 if __name__ == "__main__":

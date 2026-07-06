@@ -3,5 +3,13 @@ name = "autocompress"
 version = "0.1.0"
 description = "Autonomous lossless compression research for the Hutter Prize"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
