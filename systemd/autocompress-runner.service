@@ -1,0 +1,13 @@
+[Unit]
+Description=autocompress benchmark runner
+
+[Service]
+Type=exec
+WorkingDirectory=/home/rupan/projects/autocompress
+ExecStart=/usr/bin/env uv run runner.py
+Nice=10
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=default.target
