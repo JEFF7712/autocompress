@@ -106,6 +106,13 @@ def run_stage(cmd: list[str], cwd: Path, cpu_limit_s: float, log: Path) -> Stage
         "-p",
         "MemorySwapMax=0",
         "--",
+        # Pin to a P-core: config.toml's Geekbench T is a P-core number, and the
+        # scheduler otherwise drifts this single-threaded load onto E-cores,
+        # inflating CPU seconds ~3x and making envelope math inconsistent.
+        # (taskset, not AllowedCPUs: user scopes lack cpuset delegation here.)
+        "taskset",
+        "-c",
+        "4",
         *cmd,
     ]
 
