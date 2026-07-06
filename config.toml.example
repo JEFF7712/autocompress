@@ -1,0 +1,5 @@
+# Copy to config.toml (gitignored) and fill in the measured value.
+# Geekbench 5 SINGLE-CORE score of this machine. All CPU-time budgets derive
+# from it: prize budget per stage = 70000/T hours. Do not guess; measure, or
+# use the browser.geekbench.com median for the exact CPU model.
+geekbench5_single_core = 0
