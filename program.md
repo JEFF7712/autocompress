@@ -1,120 +1,82 @@
-# autoresearch
+# autocompress: record program
 
-This is an experiment to have the LLM do its own research.
+Mission: beat the Hutter Prize record. S = archive9 + compressor binary must
+reach <= 109,685,196 bytes on enwik9 (>= 1% below fx2-cmix's 110,793,128)
+inside the prize envelope: per stage < 70,000/T CPU-hours (T in config.toml),
+<= 10 GB RAM, <= 100 GB temp disk, single core, no GPU.
 
-## Setup
+You edit only `src/` (the vendored fx2-cmix). The harness (benchmark.py,
+runner.py, ledger.py, report.py, envelope.py, tiers.py, prepare.py) is fixed.
 
-To set up a new experiment, work with the user to:
+## Tiers and what they actually measure
 
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar20`). The branch `autocompress/<tag>` must not already exist — this is a fresh run.
-2. **Create the branch**: `git checkout -b autocompress/<tag>` from current main.
-3. **Run init.sh** to prepare the environment in one step:
-   ```bash
-   nix develop --command ./init.sh
-   ```
-   This installs Python dependencies, downloads enwik9, creates proxy slices, and runs a baseline benchmark to confirm everything works. Wait for it to print "Init complete."
-4. **Read the in-scope files**: Read these files for full context:
-   - `README.md` — repository context.
-   - `compress.cpp` — the file you modify. Compression algorithm. Starts with tunable LZMA.
-   - `benchmark.py` — fixed harness (compiles compress.cpp, runs benchmark, reports score). Do not modify.
-5. **Initialize results.tsv**: Create `results.tsv` with just the header row (see template). Record the baseline score from init.sh output as the first row.
-6. **Confirm and go**: Confirm setup looks good.
+The scored `-e` pipeline is hardwired to full enwik9's structure, so it only
+runs at t2. Proxies use the raw codec path instead:
 
-Once you get confirmation, kick off the experimentation.
+- **t0 (10 MB) / t1 (enwik8):** `cmix_orig -c`/`-d` on the raw prefix.
+  Score = comp_output + binary. This exercises the cmix codec / model /
+  mixer / coder / SSE / APM / LSTM / PPM layers ONLY. It does NOT run the wiki
+  preprocessing, dictionary, or article reordering. So a proxy score is a
+  **directional** signal for codec-layer changes (relative deltas track) and
+  is **blind** to preprocessing/dictionary/order changes.
+- **t2 (enwik9):** the full `-e` pipeline. Score = len(archive9). This is the
+  real Hutter number and the only ground truth.
 
-## Experimentation
+Consequence for experiment routing (set in the commit `Tier:` trailer):
+- Codec/model/mixer/coder experiments: `Tier: t0` (fast directional signal),
+  escalate winners to t1, then t2.
+- Preprocessing / dictionary / article-order / NLP-transform experiments:
+  `Tier: t2` directly. Proxies cannot see them; do not waste a t0 slot.
 
-Each experiment modifies `compress.cpp` and benchmarks it against the enwik9 proxy slices. The harness in `benchmark.py` compiles the C++ file, runs it, verifies roundtrip correctness, and reports the score.
+## Session cycle (review-and-refill)
 
-**You can only edit `compress.cpp`.** The harness (`benchmark.py`), data prep (`prepare.py`), and dependencies are fixed.
+1. `uv run report.py`: read every new ledger row since last session.
+2. For each finished experiment:
+   - Worse or equal at its tier: delete the branch (`git branch -D exp/NNN-name`).
+     Record one line about why it failed in research/log.md.
+   - Better at t0: escalate to t1:
+     `git switch exp/NNN-name && git commit --allow-empty -m "bench: escalate" -m "Tier: t1"`
+   - Better at t1 (and CPU/RAM within envelope): consider t2. A t2 run costs
+     ~1.5 days of laptop compute each way; only clearly promising or
+     proxy-invisible changes earn one.
+   - Better at t2: merge to main, append the new baseline, then raise the bar:
+     the new main score is the number to beat.
+3. Refill the queue to 3-6 pending branches. Each experiment:
+   - One idea per branch, branched from main: `git switch -c exp/NNN-slug main`
+   - Commit message: subject = short description; body = hypothesis, expected
+     direction and rough magnitude; final trailer line `Tier: t0`
+     (or `Tier: t2` for the preprocessing/dict/order layer, per above).
+4. Update research/log.md with what was learned.
+5. Exit. The runner daemon grinds the queue; results appear in ledger.tsv.
 
-**The goal is simple: minimize the score** — `archive_bytes + binary_bytes`: the total compressed size plus the size of the compiled `compress` binary (the decompressor). Lower is better. This mirrors the real Hutter Prize, which scores compressor + archive together.
+## Where gains plausibly live (seed list, extend via research/)
 
-Because the binary baseline (~25 KB) is negligible next to a ~200 MB archive, there is effectively no incentive to golf hand-written algorithm code. The binary term exists to forbid one specific cheat: embedding corpus-derived data — a dictionary primed on enwik9, a trained model, or the input itself — into `compress.cpp`. Such data lands in the binary and is counted byte-for-byte, so it only pays off if it saves more than it costs (which is exactly the legitimate economics of dictionary coding).
+- Speed first: fx2-cmix sits at ~95% of the time budget. Every saved CPU-hour
+  buys headroom for a bigger PPM order, more mixer contexts, or a larger LSTM.
+  Profile before believing anything. (Codec layer: proxy-visible.)
+- Dictionary: english.dic inherited from the phda9/STARLIT lineage; retrain or
+  extend against enwik9 vocabulary. (Preprocessing layer: `Tier: t2`.)
+- Article order: the embedding+t-SNE+k-means order was produced with a
+  2024-era embedding model; better embeddings or clustering may beat it.
+  (Preprocessing layer: `Tier: t2`.)
+- Mixer/model surgery: fx2-cmix removed models vs cmix for speed; check
+  whether any removal hurt more than it saved. (Codec: proxy-visible.)
+- NLP stemmer word-types: more categories or better boundaries are cheap.
+  (Preprocessing layer, but affects codec input: `Tier: t2` to score.)
+- Preprocessor: single-pass wiki transform has known TODOs. (`Tier: t2`.)
+- Rebuild constants: SEED and UPDATE_LIMIT in build_and_construct_comp.sh are
+  tunable (they were tuned for the 2024 machine). (Affects codec: proxy-visible.)
 
-## What to explore
+## Rules
 
-The starting point is LZMA2 with tunable parameters (level, dict size, lc/lp/pb). That's already much better than the previous Python bz2 approach. But there is a long road ahead:
-
-**Near-term** (tune existing algorithm):
-- Increase `DICT_SIZE` (try 128 MB, 256 MB — bigger = better compression, more memory). NOTE: the proxy is a single 128 MB slice, so a dictionary larger than the input it sees can't register a gain on proxy. Dict sizes ≥ 128 MB must be validated on the full run directly — do not discard them on a flat proxy score (see the keep/discard rule below).
-- Enable `EXTREME` mode
-- Tune `LC`/`LP`/`PB` — for text, `lc=4, lp=0, pb=2` or `lc=3, lp=0, pb=2` often works well
-- Try adding a BCJ (Branch/Call/Jump) or delta filter before LZMA2 (not helpful for XML text, but try it)
-
-**Medium-term** (better algorithms):
-- Implement PPM (Prediction by Partial Matching): order 4-8 with escape mechanism
-  — PPM typically reaches ~130-150 MB on enwik9
-- Implement a context mixer blending multiple order-N predictions
-- Try BWT + move-to-front + arithmetic coding (bzip2-style but tunable)
-- Explore preprocessing: XML/wiki-aware transforms, dictionary coding
-
-**Longer-term** (state of the art):
-- Arithmetic coding + adaptive bitwise models (PAQ/cmix-style context mixing)
-- Neural network predictor + arithmetic coder (requires significant C++ infrastructure)
-
-## Output format
-
-Each run prints exactly four lines:
-
-```
-proxy_score_bytes: 14525000
-archive_bytes: 14500000
-binary_bytes: 25000
-roundtrip_ok: true
-```
-
-The score (`proxy_score_bytes` / `full_score_bytes`) is `archive_bytes + binary_bytes`. Proxy runs print `proxy_score_bytes`, full runs print `full_score_bytes`. Parse with:
-```
-grep "^proxy_score_bytes:\|^full_score_bytes:" run.log
-```
-
-If `roundtrip_ok: false` appears or the process exits non-zero, treat as a crash.
-
-## Logging results
-
-Log each experiment to `results.tsv` (tab-separated, untracked by git). Columns:
-
-```
-commit	proxy_score_bytes	full_score_bytes	binary_bytes	status	description
-```
-
-1. git commit hash (short, 7 chars)
-2. proxy_score_bytes (archive + binary; 0 if crashed before scoring)
-3. full_score_bytes (archive + binary; 0 if not run yet)
-4. binary_bytes (size of the compiled decompressor — watch this if you embed data)
-5. status: `keep`, `discard`, or `crash`
-6. short description of what this experiment tried (no commas)
-
-Logging `binary_bytes` alongside both scores lets you watch the proxy↔full correlation hold (or break) across experiments instead of assuming it.
-
-## The experiment loop
-
-The experiment runs on a dedicated branch (e.g. `autocompress/mar20`).
-
-LOOP FOREVER:
-
-1. Look at the git state: the current branch/commit
-2. Modify `compress.cpp` with an experimental idea
-3. `git commit -m "short description"`
-4. Run: `uv run benchmark.py > run.log 2>&1` (redirect everything — do NOT use tee)
-5. Parse score: `grep "^proxy_score_bytes:" run.log`
-6. If empty (crash): run `tail -n 50 run.log` to read the error. Fix if trivial (typo, missing include); otherwise log as crash and revert.
-7. If `roundtrip_ok: false`: immediate failure — the compressor is broken. Revert.
-8. Log results in results.tsv
-9. **Keep**: if proxy_score_bytes improved (lower), keep the commit and optionally run full benchmark
-10. **Discard**: if score is equal or worse, `git reset --hard HEAD~1` to revert
-11. **Exception — proxy-invisible changes**: the proxy is one 128 MB slice. Changes whose payoff only appears at full scale — dictionaries ≥ 128 MB, long-range / whole-corpus models — can show a flat or slightly worse proxy score yet still win on the full 1 GB. For these, run the full benchmark *before* discarding, and keep/discard on the full score.
-
-When proxy improves, run the full benchmark to get a real score:
-```
-uv run benchmark.py --full > run.log 2>&1
-grep "^full_score_bytes:" run.log
-```
-Update results.tsv with the full score.
-
-**Timeout**: Proxy runs (single 128 MB slice) should finish in roughly 2-6 minutes with LZMA — longer with heavier algorithms. Full enwik9 runs may take 5-30 minutes depending on the algorithm. If a run exceeds 60 minutes, kill it and treat as a failed experiment.
-
-**Crashes**: Fix obvious bugs (typo, missing include, wrong flag). If the idea is fundamentally broken, log crash and move on.
-
-**NEVER STOP**: Once the loop has begun, do NOT pause to ask if you should continue. The human may be asleep. You are autonomous. If you run out of ideas, re-read the algorithm literature, try combinations of near-misses, try more radical changes. The loop runs until manually interrupted.
+- Never edit benchmark.py, runner.py, ledger.py, report.py, envelope.py,
+  tiers.py, prepare.py, or config.toml from an experiment branch.
+- Never delete ledger.tsv. Append-only.
+- `status != ok` rows are informative failures: read runs/<commit7>-<tier>/run.log.
+- Keep mmap_to_disk = true in src/src/models/ppmd.cpp (RAM envelope). Two
+  vendored fixes already exist and must stay: the ppmd MAP_FIXED_NOREPLACE
+  remap (this kernel relocates NULL-hint mmaps) and the -march=raptorlake
+  wrapper in flake.nix (llvm17 misdetects this CPU).
+- An experiment that beats a tier but blows the CPU or RAM envelope is a loss.
+- Do not start a t2 without checking the runner queue is otherwise empty
+  (a t2 blocks everything for ~3 days).

@@ -1,67 +1,59 @@
 # autocompress
 
-An autonomous research loop for [Hutter Prize](http://prize.hutter1.net/index.htm)-style lossless compression on `enwik9`. Inspired by [Karpathy's autoresearch](https://github.com/karpathy/autoresearch).
+Goal: beat the Hutter Prize world record. The current record is fx2-cmix
+(Kaido Orav & Byron Knoll, 2024) at S = 110,793,128 bytes; a prize claim
+requires S <= 109,685,196 (>= 1% better) on enwik9 inside the prize envelope
+(< 70,000/T CPU-hours per stage, <= 10 GB RAM, <= 100 GB temp disk, single
+core, no GPU).
 
-An LLM agent iterates on `compress.cpp`, runs compression benchmarks, keeps improvements, and discards regressions — autonomously, indefinitely.
+The reigning champion is vendored at `src/` (GPL-3.0) as the baseline. An
+agent proposes patches as `exp/*` branches; a runner daemon benchmarks them
+continuously; sessions review the ledger and refill the queue. See
+`program.md` for the loop and `docs/superpowers/specs/` for the design.
 
-## How it works
+## Layout
 
-The loop is simple:
+| Path | Role |
+|------|------|
+| `src/` | fx2-cmix (mutable: this is what experiments edit) |
+| `benchmark.py` | fixed harness: build, compress, decompress, verify, score |
+| `runner.py` | daemon: benchmarks unscored `exp/*` heads FIFO |
+| `ledger.py` / `ledger.tsv` | append-only results, keyed (commit, tier) |
+| `report.py` | deltas vs main baselines |
+| `envelope.py` | prize resource math |
+| `tiers.py` / `prepare.py` | enwik9 download + tier prefixes |
+| `config.toml` | machine Geekbench5 score (copy from config.toml.example) |
+| `program.md` | agent instructions |
+| `research/` | hypothesis backlog and findings log |
 
-1. Propose a change to the compression algorithm in `compress.cpp`
-2. Run proxy benchmark (single contiguous 128 MB slice of enwik9 — fast)
-3. If proxy improves, run full benchmark on all 1 GB of enwik9
-4. Keep commit if score improves, `git reset` otherwise
+## Tiers
 
-**Score = `archive_bytes + binary_bytes`** (lower is better — compressed output plus the size of the compiled decompressor, mirroring the Hutter Prize). Counting the binary forbids embedding corpus-derived data into `compress.cpp` to shrink the archive for free.
+Two scoring paths, because fx2-cmix's scored `-e` pipeline only works on full
+enwik9 (its preprocessing is hardwired to enwik9's exact structure):
+
+| Tier | Input | Path | Measures | Approx. cost/stage |
+|------|-------|------|----------|--------------------|
+| t0 | first 10 MB | `cmix_orig -c`/`-d` | codec layer only (directional) | ~20 min |
+| t1 | enwik8 (100 MB) | `cmix_orig -c`/`-d` | codec layer only (directional) | ~3.5 h |
+| t2 | enwik9 (1 GB) | `cmix -e` + `archive9` | real Hutter S (ground truth) | ~35 h |
+
+t0/t1 are blind to the preprocessing/dictionary/article-order layer; those
+experiments are scored directly at t2 (see `program.md`).
 
 ## Setup
 
 ```bash
-# One-time setup: enters nix dev environment, installs deps, downloads enwik9,
-# creates the proxy slice, and runs a baseline benchmark to verify everything works.
-nix develop --command ./init.sh
+nix develop --command ./init.sh   # deps, data, toolchain check
+cp config.toml.example config.toml  # then fill in measured Geekbench5 score
+systemctl --user link $PWD/systemd/autocompress-runner.service
+systemctl --user start autocompress-runner
 ```
 
-On non-NixOS Linux: `apt install gcc liblzma-dev` (Debian/Ubuntu) or `dnf install gcc xz-devel` (Fedora), then `uv sync && uv run prepare.py`.
-
-After init, `uv run benchmark.py` works from any shell — `benchmark.py` auto-invokes `nix develop` for compilation when `g++` is not on PATH.
-
-## Running experiments
+## Commands
 
 ```bash
-# Proxy run (fast, single 128 MB slice)
-uv run benchmark.py > run.log 2>&1
-grep "proxy_score_bytes:" run.log
-
-# Full run (entire 1 GB enwik9)
-uv run benchmark.py --full > run.log 2>&1
-grep "full_score_bytes:" run.log
+uv run benchmark.py --tier t0            # one-off benchmark of current HEAD
+uv run report.py                          # ledger summary
+uv run runner.py --once                   # drain queue without the service
+journalctl --user -u autocompress-runner -f
 ```
-
-Output format:
-```
-proxy_score_bytes: 20470396
-archive_bytes: 20445396
-binary_bytes: 25000
-roundtrip_ok: true
-```
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `compress.cpp` | **Mutable.** Compression algorithm — agent edits this |
-| `benchmark.py` | **Fixed.** Compiles compress.cpp, runs benchmark, verifies roundtrip |
-| `prepare.py` | **Fixed.** Downloads enwik9, generates the proxy slice |
-| `prepare_helpers.py` | **Fixed.** Shared constants (enwik9 size, proxy offset) |
-| `flake.nix` | Reproducible dev environment (gcc + liblzma) |
-| `init.sh` | One-time setup script |
-| `program.md` | Agent instructions for the autonomous loop |
-| `results_template.tsv` | TSV header template for experiment runs |
-
-## Autonomous loop
-
-See `program.md` for full agent instructions. The agent runs on a dedicated branch (e.g. `autocompress/mar5`), loops forever, and logs results to `results.tsv`.
-
-Optional: set `FX2_CMIX_BIN=/path/to/fx2-cmix` to compare against an external baseline (read-only).

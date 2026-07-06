@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
-# init.sh — one-time setup for the autocompress experiment loop.
+# init.sh: one-time setup for the autocompress record harness.
 #
-# Run this once before starting experiments:
+# Run once inside the dev shell:
 #   nix develop --command ./init.sh
-#
-# After init completes, run experiments with:
-#   uv run benchmark.py
-#   uv run benchmark.py --full
-#
-# benchmark.py auto-invokes nix develop for compilation when g++ is not on PATH,
-# so subsequent uv run benchmark.py calls work from any shell.
 
 set -euo pipefail
 
@@ -19,31 +12,33 @@ cd "$REPO"
 echo "=== autocompress init ==="
 echo ""
 
-# 1. Install Python dependencies
 echo "[1/3] Installing Python dependencies..."
 uv sync --quiet
 echo "      OK"
 echo ""
 
-# 2. Download enwik9 and create proxy slices (skips if already done)
-echo "[2/3] Preparing enwik9 dataset..."
-echo "      (downloads ~200 MB zip, extracts 1 GB — skipped if already present)"
+echo "[2/3] Preparing enwik9 dataset and tier prefixes..."
+echo "      (downloads ~300 MB zip, extracts 1 GB, writes t0/t1 prefixes; skipped if present)"
 uv run prepare.py
 echo ""
 
-# 3. Verify compile + benchmark works end-to-end
-echo "[3/3] Compiling compress.cpp and running baseline proxy benchmark..."
-uv run benchmark.py > /tmp/autocompress_init.log 2>&1 || {
-    echo "FAILED. Last 30 lines of output:"
-    tail -n 30 /tmp/autocompress_init.log
-    exit 1
-}
-grep "proxy_score_bytes:" /tmp/autocompress_init.log
-grep "roundtrip_ok:" /tmp/autocompress_init.log
+echo "[3/3] Verifying the clang-17 toolchain (fx2-cmix build deps)..."
+clang++-17 --version | head -n 1
+upx-ucl --version | head -n 1
+make --version | head -n 1
+echo "      OK"
 echo ""
 
-echo "=== Init complete. Environment is ready. ==="
+echo "=== Init complete. ==="
 echo ""
-echo "Start the experiment loop:"
-echo "  Read program.md for instructions, then edit compress.cpp and run:"
-echo "  uv run benchmark.py > run.log 2>&1"
+echo "Next:"
+echo "  1. cp config.toml.example config.toml   # fill in measured Geekbench5 single-core"
+echo "  2. Build the baseline compressor (~20 min, PGO):"
+echo "       cd src && nix develop .. --command bash build_and_construct_comp.sh && cd .."
+echo "  3. Baseline benchmarks (see docs plan, Phase 0):"
+echo "       uv run benchmark.py --tier t0 --append-ledger"
+echo "  4. Enable the runner service:"
+echo "       systemctl --user link \$PWD/systemd/autocompress-runner.service"
+echo "       systemctl --user start autocompress-runner"
+echo ""
+echo "Read program.md for the experiment loop."
