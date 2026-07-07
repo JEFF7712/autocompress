@@ -44,10 +44,13 @@ experiments are scored directly at t2 (see `program.md`).
 
 ```bash
 nix develop --command ./init.sh   # deps, data, toolchain check
-cp config.toml.example config.toml  # then fill in measured Geekbench5 score
-systemctl --user link $PWD/systemd/autocompress-runner.service
-systemctl --user start autocompress-runner
+cp config.toml.example config.toml  # then fill in per-machine values
+./systemd/install.sh                # generate + enable the runner service
 ```
+
+Deployment to a Kubernetes cluster (container image via `nix build
+.#runner-image`, `ram_enforcer = "external"`) is supported; manifests live
+with the target cluster's GitOps config, not here.
 
 ## Commands
 

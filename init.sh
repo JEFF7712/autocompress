@@ -38,7 +38,6 @@ echo "       cd src && nix develop .. --command bash build_and_construct_comp.sh
 echo "  3. Baseline benchmarks (see docs plan, Phase 0):"
 echo "       uv run benchmark.py --tier t0 --append-ledger"
 echo "  4. Enable the runner service:"
-echo "       systemctl --user link \$PWD/systemd/autocompress-runner.service"
-echo "       systemctl --user start autocompress-runner"
+echo "       ./systemd/install.sh"
 echo ""
 echo "Read program.md for the experiment loop."
