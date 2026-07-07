@@ -48,3 +48,24 @@ t0 carries fixed model-init overhead and the -e stream differs from raw text;
 t1 will give the real slope. If t1 confirms the overshoot, the whole record
 attempt hinges on speed work first (which is where fx2-cmix's own authors
 focused too). Watch this number.
+
+## 2026-07-07: Phase 0 t1 baseline, and a compliance lesson
+
+t1 (enwik8, codec path): score 15,979,075 = archive 15,836,339 + cmix_orig
+142,736. Roundtrip ok. comp 21,682 s, decomp 19,979 s, peak RSS 7.46 GB.
+Rate is almost perfectly linear vs t0 (marginal ~216 s/MB), so t0 is a
+trustworthy directional proxy for codec-layer changes at 10x less cost.
+
+Feasibility finding: a t2 stage extrapolates to ~56 h at codec rate vs the
+33.4 h the Geekbench ratio predicts from the fx2-cmix submission (64.8 h at
+T=1026). Either way it straddles or exceeds this laptop's enforced 35.9 h
+budget. Lesson: GB5 single-core overrates memory-latency-bound cmix
+throughput on this laptop (LPDDR5), and prize compliance depends on the
+machine's ratio (cmix_hours x T / 70,000), which was already 0.95 on the
+authors' Xeon. Consequences:
+- Do not run t2 on this laptop; it would likely hit the RLIMIT and waste
+  ~1.5 days. t2 belongs on a machine with a favorable ratio (measure the
+  homelab workers' GB5 AND their cmix t0 rate before committing).
+- Speed experiments are not optional polish; they are the gate to running
+  a compliant t2 anywhere, and every saved CPU-hour also buys model
+  headroom. First experiment wave should be profiling + speed.
