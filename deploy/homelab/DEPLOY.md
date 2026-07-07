@@ -3,6 +3,23 @@
 Status: **UNTESTED DRAFTS.** Nothing here has run against the cluster. Do not
 copy into the homelab GitOps repo until validated live.
 
+## Image
+
+Built from the repo flake, NOT a Dockerfile, so laptop and cluster share the
+exact nixpkgs toolchain pin (binary_bytes is part of the score; an apt clang
+would produce different binaries and non-comparable ledger rows):
+
+```bash
+nix build .#runner-image
+podman load < result
+podman push jeff7712/autocompress-runner:0.1.0
+```
+
+The `clang++-17` wrapper only rewrites `-march=native` when
+`AUTOCOMPRESS_MARCH` is set; the laptop devshell sets `raptorlake` (LLVM 17
+misdetects that CPU), the image leaves it unset because LLVM 17 detects the
+homelab's Zen 1 workers correctly. Do not set it in the pod.
+
 ## Target
 
 Talos k8s cluster (homelab repo: gitops via ArgoCD, apps/*.yaml ->
@@ -55,7 +72,7 @@ writes; SSD wear is the documented cost of mmap_to_disk=true).
 
 ## Checklist when the cluster is back
 
-1. Build + push the image (`Containerfile` here), pin a digest.
+1. Build + push the image (`nix build .#runner-image`, see above), pin a digest.
 2. Measure Geekbench 5 single-core on the target worker; fill the ConfigMap.
 3. Implement runner remote mode (item 1 above) + entrypoint.sh; test the
    image locally with podman first (t0 end to end with ram_enforcer=external).
