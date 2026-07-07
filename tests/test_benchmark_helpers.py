@@ -1,4 +1,19 @@
-from benchmark import classify_failure, render_output
+from benchmark import classify_failure, render_output, stage_argv
+from envelope import MachineConfig
+
+
+def test_stage_argv_systemd_and_pin():
+    m = MachineConfig(geekbench_t=1950, pin_cpu=4, ram_enforcer="systemd-run")
+    argv = stage_argv(["./cmix", "-c", "in", "out"], m)
+    assert argv[0] == "systemd-run"
+    assert "taskset" in argv
+    assert argv[-4:] == ["./cmix", "-c", "in", "out"]
+
+
+def test_stage_argv_external_no_pin():
+    m = MachineConfig(geekbench_t=750, pin_cpu=None, ram_enforcer="external")
+    argv = stage_argv(["./cmix", "-c", "in", "out"], m)
+    assert argv == ["./cmix", "-c", "in", "out"]
 
 
 def test_classify_ok():

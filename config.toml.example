@@ -1,5 +1,20 @@
-# Copy to config.toml (gitignored) and fill in the measured value.
-# Geekbench 5 SINGLE-CORE score of this machine. All CPU-time budgets derive
-# from it: prize budget per stage = 70000/T hours. Do not guess; measure, or
-# use the browser.geekbench.com median for the exact CPU model.
+# Copy to config.toml (gitignored) and fill in per-machine values.
+
+# Geekbench 5 SINGLE-CORE score of this machine (best core). All CPU-time
+# budgets derive from it: prize budget per stage = 70000/T hours. Do not
+# guess; measure, or use the browser.geekbench.com median for the exact CPU
+# model and note the provenance in a comment.
 geekbench5_single_core = 0
+
+# Optional: pin benchmark stages to this CPU number (taskset). Required on
+# hybrid CPUs (P+E cores) where the Geekbench score is a P-core number but
+# the scheduler drifts single-threaded loads onto E-cores. Omit on
+# homogeneous CPUs or inside a container with its own cpuset.
+# pin_cpu = 4
+
+# How the 10 GB prize RAM cap is enforced:
+#   "systemd-run" (default): wrap stages in a systemd user scope with
+#                            MemoryMax. Needs a user systemd session.
+#   "external":              the environment already caps RAM (e.g. a k8s pod
+#                            with a 10Gi memory limit). No wrapping.
+# ram_enforcer = "systemd-run"

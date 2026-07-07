@@ -32,7 +32,8 @@ from pathlib import Path
 
 from envelope import (
     RAM_LIMIT_BYTES,
-    load_geekbench_t,
+    MachineConfig,
+    load_machine_config,
     projected_prize_hours,
     tier_cpu_limit_seconds,
 )
@@ -95,26 +96,35 @@ def render_output(
     )
 
 
-def run_stage(cmd: list[str], cwd: Path, cpu_limit_s: float, log: Path) -> Stage:
-    argv = [
-        "systemd-run",
-        "--user",
-        "--scope",
-        "--quiet",
-        "-p",
-        f"MemoryMax={RAM_LIMIT_BYTES}",
-        "-p",
-        "MemorySwapMax=0",
-        "--",
-        # Pin to a P-core: config.toml's Geekbench T is a P-core number, and the
-        # scheduler otherwise drifts this single-threaded load onto E-cores,
-        # inflating CPU seconds ~3x and making envelope math inconsistent.
-        # (taskset, not AllowedCPUs: user scopes lack cpuset delegation here.)
-        "taskset",
-        "-c",
-        "4",
-        *cmd,
-    ]
+def stage_argv(cmd: list[str], machine: MachineConfig) -> list[str]:
+    argv: list[str] = []
+    if machine.ram_enforcer == "systemd-run":
+        argv += [
+            "systemd-run",
+            "--user",
+            "--scope",
+            "--quiet",
+            "-p",
+            f"MemoryMax={RAM_LIMIT_BYTES}",
+            "-p",
+            "MemorySwapMax=0",
+            "--",
+        ]
+    # ram_enforcer = "external": the environment caps RAM (e.g. k8s pod limits).
+    if machine.pin_cpu is not None:
+        # Pin to a fixed core: config.toml's Geekbench T is a best-core number,
+        # and on hybrid CPUs the scheduler otherwise drifts this single-threaded
+        # load onto E-cores, inflating CPU seconds ~3x and making envelope math
+        # inconsistent. (taskset, not AllowedCPUs: user scopes lack cpuset
+        # delegation here.)
+        argv += ["taskset", "-c", str(machine.pin_cpu)]
+    return argv + cmd
+
+
+def run_stage(
+    cmd: list[str], cwd: Path, cpu_limit_s: float, log: Path, machine: MachineConfig
+) -> Stage:
+    argv = stage_argv(cmd, machine)
 
     def limits() -> None:
         lim = int(cpu_limit_s)
@@ -179,7 +189,12 @@ class Result:
 
 
 def _codec_result(
-    src_dir: Path, scratch: Path, tier_file: Path, cpu_limit: float, log: Path
+    src_dir: Path,
+    scratch: Path,
+    tier_file: Path,
+    cpu_limit: float,
+    log: Path,
+    machine: MachineConfig,
 ) -> Result:
     """t0/t1: score cmix_orig -c/-d on the raw prefix."""
     compressor = src_dir / "run" / "cmix_orig"
@@ -189,7 +204,11 @@ def _codec_result(
     shutil.copy2(compressor, scratch / "cmix_orig")
 
     comp = run_stage(
-        ["./cmix_orig", "-c", str(tier_file), "out.comp"], scratch, cpu_limit, log
+        ["./cmix_orig", "-c", str(tier_file), "out.comp"],
+        scratch,
+        cpu_limit,
+        log,
+        machine,
     )
     out = scratch / "out.comp"
     if comp.returncode != 0 or not out.exists():
@@ -213,7 +232,7 @@ def _codec_result(
 
     archive_bytes = out.stat().st_size
     dec = run_stage(
-        ["./cmix_orig", "-d", "out.comp", "restored"], scratch, cpu_limit, log
+        ["./cmix_orig", "-d", "out.comp", "restored"], scratch, cpu_limit, log, machine
     )
     peak = max(comp.peak_rss_bytes, dec.peak_rss_bytes)
     restored = scratch / "restored"
@@ -261,7 +280,12 @@ def _codec_result(
 
 
 def _selfextract_result(
-    src_dir: Path, scratch: Path, tier_file: Path, cpu_limit: float, log: Path
+    src_dir: Path,
+    scratch: Path,
+    tier_file: Path,
+    cpu_limit: float,
+    log: Path,
+    machine: MachineConfig,
 ) -> Result:
     """t2: real -e pipeline. cmix (self-extracting) must be named 'cmix' in cwd;
     it writes archive9 to cwd; ./archive9 writes enwik9_restored to cwd."""
@@ -270,7 +294,11 @@ def _selfextract_result(
     shutil.copy2(compressor, scratch / "cmix")
 
     comp = run_stage(
-        ["./cmix", "-e", str(tier_file), "enwik9.comp"], scratch, cpu_limit, log
+        ["./cmix", "-e", str(tier_file), "enwik9.comp"],
+        scratch,
+        cpu_limit,
+        log,
+        machine,
     )
     archive = scratch / "archive9"
     if comp.returncode != 0 or not archive.exists():
@@ -293,7 +321,7 @@ def _selfextract_result(
         )
 
     archive_bytes = archive.stat().st_size
-    dec = run_stage(["./archive9"], scratch, cpu_limit, log)
+    dec = run_stage(["./archive9"], scratch, cpu_limit, log, machine)
     peak = max(comp.peak_rss_bytes, dec.peak_rss_bytes)
     restored = scratch / "enwik9_restored"
     if dec.returncode != 0 or not restored.exists():
@@ -360,7 +388,8 @@ def main() -> None:
             f"{config_path} missing: copy config.toml.example to config.toml and "
             "fill in the measured Geekbench5 single-core score"
         )
-    geekbench_t = load_geekbench_t(config_path)
+    machine = load_machine_config(config_path)
+    geekbench_t = machine.geekbench_t
     cpu_limit = tier_cpu_limit_seconds(args.tier, geekbench_t)
     tier_file = (
         CACHE / "enwik9" if args.tier == "t2" else CACHE / "tiers" / f"{args.tier}.bin"
@@ -385,7 +414,7 @@ def main() -> None:
     try:
         build(src_dir, log)
         run = _selfextract_result if args.tier == "t2" else _codec_result
-        res = run(src_dir, scratch, tier_file, cpu_limit, log)
+        res = run(src_dir, scratch, tier_file, cpu_limit, log, machine)
     except RuntimeError as e:
         print(e, file=sys.stderr)
         res = Result("crash", 0, 0, 0.0, 0.0, 0, False, 0)

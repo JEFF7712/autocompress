@@ -4,6 +4,7 @@ from envelope import (
     RAM_LIMIT_BYTES,
     cpu_budget_seconds,
     load_geekbench_t,
+    load_machine_config,
     projected_prize_hours,
     tier_cpu_limit_seconds,
 )
@@ -38,3 +39,29 @@ def test_load_geekbench_t(tmp_path):
     cfg.write_text("geekbench5_single_core = 0\n")
     with pytest.raises(ValueError):
         load_geekbench_t(cfg)
+
+
+def test_machine_config_defaults(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text("geekbench5_single_core = 1800\n")
+    m = load_machine_config(cfg)
+    assert m.pin_cpu is None
+    assert m.ram_enforcer == "systemd-run"
+
+
+def test_machine_config_explicit(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        'geekbench5_single_core = 750\npin_cpu = 2\nram_enforcer = "external"\n'
+    )
+    m = load_machine_config(cfg)
+    assert m.geekbench_t == 750.0
+    assert m.pin_cpu == 2
+    assert m.ram_enforcer == "external"
+
+
+def test_machine_config_rejects_unknown_enforcer(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('geekbench5_single_core = 750\nram_enforcer = "docker"\n')
+    with pytest.raises(ValueError):
+        load_machine_config(cfg)

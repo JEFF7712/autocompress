@@ -4,6 +4,7 @@ disk, where T is the machine's Geekbench5 single-core score. Single core,
 no GPU. CPU seconds (not wall time) so laptop suspends don't corrupt timing."""
 
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 RAM_LIMIT_BYTES = 10_000_000_000
@@ -11,16 +12,38 @@ FX2_SUBMISSION_GEEKBENCH_T = 1026
 
 _FIXED_TIER_CPU_LIMIT_S = {"t0": 2 * 3600, "t1": 12 * 3600}
 
+_RAM_ENFORCERS = ("systemd-run", "external")
 
-def load_geekbench_t(config_path: Path) -> float:
+
+@dataclass(frozen=True)
+class MachineConfig:
+    geekbench_t: float
+    pin_cpu: int | None
+    ram_enforcer: str
+
+
+def load_machine_config(config_path: Path) -> MachineConfig:
     with config_path.open("rb") as f:
-        t = tomllib.load(f)["geekbench5_single_core"]
+        raw = tomllib.load(f)
+    t = raw["geekbench5_single_core"]
     if t <= 0:
         raise ValueError(
             "geekbench5_single_core unset in config.toml: measure Geekbench 5 "
             "single-core on this machine and fill it in (see config.toml.example)"
         )
-    return float(t)
+    enforcer = raw.get("ram_enforcer", "systemd-run")
+    if enforcer not in _RAM_ENFORCERS:
+        raise ValueError(f"ram_enforcer must be one of {_RAM_ENFORCERS}: {enforcer}")
+    pin = raw.get("pin_cpu")
+    return MachineConfig(
+        geekbench_t=float(t),
+        pin_cpu=int(pin) if pin is not None else None,
+        ram_enforcer=enforcer,
+    )
+
+
+def load_geekbench_t(config_path: Path) -> float:
+    return load_machine_config(config_path).geekbench_t
 
 
 def cpu_budget_seconds(geekbench_t: float) -> float:
