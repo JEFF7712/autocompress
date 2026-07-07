@@ -53,19 +53,17 @@
     {
       devShells = forAll (
         s: pkgs: {
-          default = pkgs.mkShell {
-            packages = toolchain pkgs ++ [ (unstable s).uv ];
-            # This host's GB5 score in config.toml is a P-core (Raptor Lake)
-            # number and LLVM 17 misdetects this CPU; see wrapper above.
-            shellHook = "export AUTOCOMPRESS_MARCH=raptorlake";
-          };
+          # AUTOCOMPRESS_MARCH is intentionally not set here: benchmark.py
+          # exports it from config.toml's march_override, keeping all
+          # machine-specific state in that one untracked file.
+          default = pkgs.mkShell { packages = toolchain pkgs ++ [ (unstable s).uv ]; };
         }
       );
 
       packages = forAll (
         s: pkgs: {
           runner-image = pkgs.dockerTools.buildLayeredImage {
-            name = "jeff7712/autocompress-runner";
+            name = "autocompress-runner";
             tag = "0.1.0";
             contents = toolchain pkgs ++ [
               (unstable s).uv

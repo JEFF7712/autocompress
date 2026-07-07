@@ -20,6 +20,7 @@ class MachineConfig:
     geekbench_t: float
     pin_cpu: int | None
     ram_enforcer: str
+    march_override: str | None
 
 
 def load_machine_config(config_path: Path) -> MachineConfig:
@@ -39,6 +40,7 @@ def load_machine_config(config_path: Path) -> MachineConfig:
         geekbench_t=float(t),
         pin_cpu=int(pin) if pin is not None else None,
         ram_enforcer=enforcer,
+        march_override=raw.get("march_override"),
     )
 
 

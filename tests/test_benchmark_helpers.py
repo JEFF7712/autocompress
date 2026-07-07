@@ -3,7 +3,9 @@ from envelope import MachineConfig
 
 
 def test_stage_argv_systemd_and_pin():
-    m = MachineConfig(geekbench_t=1950, pin_cpu=4, ram_enforcer="systemd-run")
+    m = MachineConfig(
+        geekbench_t=1950, pin_cpu=4, ram_enforcer="systemd-run", march_override=None
+    )
     argv = stage_argv(["./cmix", "-c", "in", "out"], m)
     assert argv[0] == "systemd-run"
     assert "taskset" in argv
@@ -11,7 +13,9 @@ def test_stage_argv_systemd_and_pin():
 
 
 def test_stage_argv_external_no_pin():
-    m = MachineConfig(geekbench_t=750, pin_cpu=None, ram_enforcer="external")
+    m = MachineConfig(
+        geekbench_t=750, pin_cpu=None, ram_enforcer="external", march_override=None
+    )
     argv = stage_argv(["./cmix", "-c", "in", "out"], m)
     assert argv == ["./cmix", "-c", "in", "out"]
 

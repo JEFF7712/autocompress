@@ -145,16 +145,23 @@ def run_stage(
     )
 
 
-def build(src_dir: Path, log: Path) -> None:
+def build(src_dir: Path, log: Path, machine: MachineConfig) -> None:
     env_cmd: list[str] = []
     if not shutil.which("clang++-17"):
         env_cmd = ["nix", "develop", str(REPO), "--command"]
+    env = os.environ.copy()
+    if machine.march_override:
+        # The devshell's clang++-17 wrapper rewrites -march=native to this
+        # target; needed where LLVM 17 misdetects the host CPU (see
+        # config.toml.example).
+        env["AUTOCOMPRESS_MARCH"] = machine.march_override
     with log.open("ab") as lf:
         r = subprocess.run(
             [*env_cmd, "bash", "build_and_construct_comp.sh"],
             cwd=src_dir,
             stdout=lf,
             stderr=subprocess.STDOUT,
+            env=env,
         )
     if r.returncode != 0:
         raise RuntimeError(f"build failed, see {log}")
@@ -412,7 +419,7 @@ def main() -> None:
     scratch.mkdir(parents=True)
 
     try:
-        build(src_dir, log)
+        build(src_dir, log, machine)
         run = _selfextract_result if args.tier == "t2" else _codec_result
         res = run(src_dir, scratch, tier_file, cpu_limit, log, machine)
     except RuntimeError as e:

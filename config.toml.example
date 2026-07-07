@@ -18,3 +18,10 @@ geekbench5_single_core = 0
 #   "external":              the environment already caps RAM (e.g. a k8s pod
 #                            with a 10Gi memory limit). No wrapping.
 # ram_enforcer = "systemd-run"
+
+# Optional: explicit -march target for the fx2-cmix build. Set this where
+# LLVM 17's -march=native misdetects the host and silently drops AVX2 (known:
+# 13th/14th-gen Intel mobile -> "raptorlake"). Verify with:
+#   clang++-17 -march=native -dM -E -x c++ /dev/null | grep __AVX2__
+# Omit on CPUs LLVM 17 detects correctly.
+# march_override = "raptorlake"

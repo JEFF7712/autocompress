@@ -47,6 +47,13 @@ def test_machine_config_defaults(tmp_path):
     m = load_machine_config(cfg)
     assert m.pin_cpu is None
     assert m.ram_enforcer == "systemd-run"
+    assert m.march_override is None
+
+
+def test_machine_config_march_override(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('geekbench5_single_core = 1800\nmarch_override = "raptorlake"\n')
+    assert load_machine_config(cfg).march_override == "raptorlake"
 
 
 def test_machine_config_explicit(tmp_path):
