@@ -28,3 +28,23 @@ enhancement.
 Baseline codec roundtrip verified: `cmix_orig -c`/`-d` on a 1 MB enwik9 prefix
 is byte-identical (1,000,000 -> 199,137 bytes). Full-enwik9 `-e` roundtrip and
 the ~110.8 MB reproduction are pending the Phase 0 t2 run.
+
+## 2026-07-06: Phase 0 t0 baseline
+
+t0 (10 MB prefix, codec path): score 1,921,963 = archive 1,779,227 +
+cmix_orig 142,736. Roundtrip ok, peak RSS 6.19 GB, deterministic across
+rebuilds (identical bytes on two independent PGO builds).
+
+Timing lesson: unpinned, the scheduler drifted the single-threaded run onto
+E-cores (comp 4,231 s, decomp 1,887 s, wildly asymmetric). Pinned to P-core 4
+(taskset inside the systemd-run scope; AllowedCPUs= silently no-ops without
+cpuset delegation): comp 2,284 s, decomp 2,210 s, symmetric as expected.
+config.toml's Geekbench T (1950, P-core number) is only consistent with
+P-core-pinned runs, so pinning is part of the harness contract now.
+
+Effective codec rate ~4.4 KB/s. Naive extrapolation to t2 (~934 MB
+preprocessed stream) suggests ~59 h/stage vs the enforced 35.9 h limit, BUT
+t0 carries fixed model-init overhead and the -e stream differs from raw text;
+t1 will give the real slope. If t1 confirms the overshoot, the whole record
+attempt hinges on speed work first (which is where fx2-cmix's own authors
+focused too). Watch this number.
