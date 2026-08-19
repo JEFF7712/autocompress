@@ -101,8 +101,7 @@ void Predictor::AddMatch() {
   {0, 8}, 
   {1, 8}, 
   {7, 4},
-      {11, 3}, 
-      {13, 2}, 
+      {11, 3},
   };
 
   for (const auto& params : model_params) {
