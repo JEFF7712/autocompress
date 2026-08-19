@@ -69,3 +69,25 @@ authors' Xeon. Consequences:
 - Speed experiments are not optional polish; they are the gate to running
   a compliant t2 anywhere, and every saved CPU-hour also buys model
   headroom. First experiment wave should be profiling + speed.
+
+## 2026-08-18: first speed wave queued
+
+No finished experiments since Phase 0. Queue was empty; runner idle.
+t2 still blocked on this laptop (compliance ratio). First wave is five
+one-knob codec probes at t0, chosen to measure where CPU actually lives
+rather than to chase bytes:
+
+- exp/001-mixer-skip-1e6: raise Mixer::Perceive skip threshold 5e-12 → 1e-6.
+  Tests whether the documented mixer-skip is idle.
+- exp/002-fast-tanh: restore the commented LSTM tanh approximation.
+  Cheap numerical swap; score should be ~flat if it is a win.
+- exp/003-lstm-horizon-64: BPTT 128 → 64.
+- exp/004-lstm-cells-160: hidden 200 → 160.
+  Horizon vs cells: whichever moves CPU more is the LSTM bottleneck.
+- exp/005-drop-match-13-2: drop the shortest leftover context-hash match.
+  Continues fx2's "remove match models for speed" cut.
+
+Keep/discard next session: worse-or-equal score at t0 → delete branch;
+faster with equal-or-better score → escalate to t1; faster but worse
+score is still a useful measurement (CPU budget we can spend). Do not
+queue a t2.
