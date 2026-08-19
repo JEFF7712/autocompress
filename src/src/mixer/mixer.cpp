@@ -72,7 +72,7 @@ void Mixer::Perceive(int bit) {
   ++steps_;
    
   float update =   learning_rate_ * (Sigmoid::Logistic(p_) - bit);
-  if(fabs(update)<0.000000000005f && extra_inputs_size_>0) {
+  if(fabs(update)<1e-6f && extra_inputs_size_>0) {
       return;
   }
    // ++data->steps;
